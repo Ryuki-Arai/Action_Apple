@@ -1,0 +1,181 @@
+//ヘッダーファイル読み込み
+#include "DxLib.h"
+#include <math.h>
+
+//コンパイル時の警告表示抑制
+#pragma warning( disable:4305 4244 4305 )
+
+int WINAPI WinMain(HINSTANCE hI, HINSTANCE hP, LPSTR lpC, int nC)
+{
+	//変数宣言
+	float r1=0.25; //視点の回転角度
+	float r2=0.25; //視点の回転角度
+	float kyori=1000.0;	//中心からカメラまでの距離
+	float x,y,z;		//ループ処理用など汎用変数
+	float x1=0.0,x1d=10.0;
+	float r3=50.0,r3d=3.0;	//r3は拡大縮小するボール、r3dは変化量
+	float r4=0.0;			//回転するボールの回転角度
+	int mf=0;				//ミサイル発射フラグ
+	float a;
+	int L1;										//追加したライトのハンドル
+	int ModelHandle;
+
+	float cx=0.0,cy=0.0;
+
+	//画面サイズとウィンドウモード設定(どれかひとつを選択)
+//	SetGraphMode(  320, 240, 32 );
+//	SetGraphMode(  640, 480, 32 );
+//	SetGraphMode(  800, 600, 32 );
+	SetGraphMode( 1366, 768, 32 );
+//	SetGraphMode( 1280,1024, 32 );
+//	SetGraphMode( 1920,1080, 32 );	//フルスクリーンの解像度
+
+	ChangeWindowMode(TRUE);						//ウィンドウモードで起動、コメントアウトでフルスクリーン
+
+	SetFullSceneAntiAliasingMode( 4, 2 ) ;		// フルシーンアンチエイリアスを設定、少し遅くなりますがきれいに表示されます。
+
+	if( DxLib_Init()==-1) return -1;			//DXライブラリ初期化
+
+	// ３Ｄモデルの読み込み
+	ModelHandle = MV1LoadModel( "robot.mqo" ) ;
+
+	SetUseZBuffer3D( TRUE ) ;					// Ｚバッファを有効にする
+	SetWriteZBuffer3D( TRUE ) ;
+
+	ChangeLightTypeDir( VGet( -1.0, 0.0, 0.0  ) ) ;		//追加する照明タイプ設定
+	L1 = CreateDirLightHandle( VGet( 10.0, 0.0, 0.0));	//照明を追加
+
+	SetBackgroundColor(0,0,0);					//背景色
+	SetDrawScreen(DX_SCREEN_BACK );				//裏画面に描画
+
+
+	//メインループ
+	while(ProcessMessage()==0 && CheckHitKey(KEY_INPUT_ESCAPE)==0)
+	{
+//		r1+=0.001;		//自動回転
+
+		ClsDrawScreen();		//描画する画面（裏）を黒クリア
+
+		if(CheckHitKey( KEY_INPUT_W    ) == 1)cx+=0.05;		//時計方向回転
+
+		//カメラの移動
+		if(CheckHitKey( KEY_INPUT_LEFT    ) == 1)r1-=0.05;		//時計方向回転
+		if(CheckHitKey( KEY_INPUT_RIGHT   ) == 1)r1+=0.05;		//反時計方向回転
+		if(CheckHitKey( KEY_INPUT_UP      ) == 1)r2+=0.05;		//上移動
+		if(CheckHitKey( KEY_INPUT_DOWN    ) == 1)r2-=0.05;		//下移動
+
+		if(CheckHitKey( KEY_INPUT_NUMPAD2 ) == 1)kyori+=10.0;	//原点から遠くへ
+		if(CheckHitKey( KEY_INPUT_NUMPAD8 ) == 1)kyori-=10.0;	//原点に近づく
+
+		if(r1>=3.141592*2)r1=0.0;	//回転角度が2paiを超えたら0.0に
+		if(r1<0.0)r1=3.141592*2;	//回転角度が0.0を下回ったら2paiに
+
+		if(r2>=3.141592*2)r2=0.0;
+		if(r2<0.0)r2=3.141592*2;
+
+		//カメラの位置と注視点をセット、注視点は原点
+		SetCameraPositionAndTargetAndUpVec( VGet(kyori*cos(r1)*cos(r2)*1,kyori*sin(r2)*1,kyori*sin(r1)*cos(r2)*1), VGet(0,0,0),VGet(0,cos(r2),0));
+
+		//座標軸。赤がx軸, 緑がy軸, 青がz軸
+		DrawLine3D( VGet( 500.0,   0.0,  0.0 ), VGet( -500.0,   0.0,  0.0 ), GetColor( 255, 0,0 ) ) ; //x
+		DrawLine3D( VGet( 0.0,   500.0,  0.0 ), VGet( 0.0,   -500.0,  0.0 ), GetColor( 0, 255,0 ) ) ; //y
+		DrawLine3D( VGet(  0.0,   0.0,  500.0 ), VGet( 0.0,   0.0,  -500.0 ), GetColor( 0,0,255 ) ) ; //z
+		DrawFormatString(10,10,GetColor(255,255,255),"赤がx軸, 緑がy軸, 青がz軸");
+		DrawFormatString(10,30,GetColor(255,255,255),"r1=%8.4f, r2=%8.4f",r1,r2);
+		DrawFormatString(10,50,GetColor(255,255,255),"カメラ回転：←→↑↓ 距離：テンキー２８");
+
+		//座標軸の先端のコーン（円錐）
+		DrawCone3D(VGet(600.0, 0.0, 0.0),VGet(500.0,0.0,0.0),20.0,16,GetColor( 255,0,0 ),GetColor( 255,255,255 ), TRUE);
+		DrawCone3D(VGet(0.0, 600.0, 0.0),VGet(0.0,500.0,0.0),20.0,16,GetColor( 0,255,0 ),GetColor( 255,255,255 ), TRUE);
+		DrawCone3D(VGet(0.0, 0.0, 600.0),VGet(0.0,0.0,500.0),20.0,16,GetColor( 0,0,255 ),GetColor( 255,255,255 ), TRUE);
+
+//■■■ここから
+
+		//★★①線 GetColor(赤,緑,青)それぞれ０～２５５
+		DrawFormatString(10,100,GetColor(255,255,255),"線 始点座標(200.0,50.0,0.0), 終点座標(400.0,100.0,0.0)");
+		DrawLine3D( VGet(200.0,50.0,0.0),VGet(400.0,100.0,0.0), GetColor(255,0,0) ) ;
+
+		//★★②球
+//		DrawFormatString(10,130,GetColor(255,255,255),"球 中心座標(0.0,0.0,0.0), 半径(50.0), 分割数(64)");
+//		DrawSphere3D( VGet(0.0,0.0,0.0), 50.0, 8, GetColor(255,0,0),GetColor(255,255,255),TRUE );	//赤い球  FALSE or TRUE
+
+		//★★③三角形
+//		DrawFormatString(10,160,GetColor(255,255,255),"三角形 ３つの座標( (0,0,0), (300,0,0), (0,0,300))");
+//		DrawTriangle3D( VGet(0,0,0),VGet(300,0,0),VGet(0,0,300),GetColor(128,128,255),TRUE);
+
+		//★★④カプセル
+//		DrawFormatString(10,190,GetColor(255,255,255),"カプセル 始点座標(100,-100,200), 終点座標(200,100,200),直径40.0,分割数16");
+//		DrawCapsule3D( VGet(100,-100,200), VGet(200,100,200), 40.0,16,GetColor(255,255,0),GetColor(255,255,255), TRUE);
+
+		//★★⑤コーン
+//		DrawFormatString(10,220,GetColor(255,255,255),"コーン 始点座標(320.0,400.0,50.0), 終点座標(320.0,100.0,50.0),直径80.0,分割数16");
+//		DrawCone3D( VGet(320.0,400.0,50.0), VGet(320.0,100.0,50.0),80.0,64,GetColor(0,0,255), GetColor(255,255,255),TRUE);
+
+
+		//★★⑥大量の球
+//		for(x=-1000;x<=1000;x+=300)
+//		{
+//			for(y=-1000;y<=1000;y+=300)
+//			{
+//				DrawSphere3D(VGet(x,y,0),30.0, 4, GetColor(0,255,0),GetColor(255,255,255),TRUE);
+//			}
+//		}
+
+		//★★⑦移動する球
+//		DrawSphere3D(VGet(x1,0,0), 30.0, 16, GetColor(0,255,255),GetColor(255,255,255),TRUE);
+//		x1=x1+x1d;
+//		if(x1>800 || x1<-800)x1d*=(-1);
+
+		//★★⑧拡大縮小球
+//		DrawSphere3D(VGet(0,100,-50), r3, 16, GetColor(255,0,0),GetColor(255,255,255),TRUE);
+//		DrawSphere3D(VGet(0,100, 50), r3, 16, GetColor(255,0,0),GetColor(255,255,255),TRUE);
+//		r3=r3+r3d;
+//		if(r3>100 || r3<50)r3d*=(-1);
+
+		//★★⑨回転移動する球
+//		DrawSphere3D(VGet(sin(r4)*200,300,cos(r4)*200), 30, 16, GetColor(255,0,255),GetColor(255,255,255),TRUE);
+//		r4+=0.05;
+//		if(r4>3.141592*2)r4=0.0;
+
+		//★★⑩ミサイル発射
+/*		if( mf==0 && CheckHitKey( KEY_INPUT_SPACE )==1 )
+		{
+			mf=1;
+			a=0.0;
+		}
+
+		if(mf==1)
+		{
+			DrawCone3D(VGet(600.0+a, 0.0, 0.0),VGet(500.0+a,0.0,0.0),20.0,16,GetColor( 255,0,0 ),GetColor( 255,255,255 ), TRUE);
+
+			DrawCone3D(VGet(0.0, 0.0, 600.0+a),VGet(0.0,0.0,500.0+a),20.0,16,GetColor( 0,0,255 ),GetColor( 255,255,255 ), TRUE);
+			a+=10.0;		
+	   		if(a>=1000.0)mf=0;
+ 		}
+*/
+
+/*
+		//★★⑪モデルの表示
+		// 画面に映る位置に３Ｄモデルを移動
+		MV1SetPosition( ModelHandle, VGet( 0.0, 0.0, 0.0 ) ) ;
+
+		// ３Ｄモデルのスケールを全方向0.5倍にする
+		MV1SetScale( ModelHandle, VGet( 0.5f, 0.5f, 0.5f ) ) ;
+
+		// ３ＤモデルのY軸の回転値を９０度にセットする
+		MV1SetRotationXYZ( ModelHandle, VGet( 0.0, 90.0 * 3.1415 / 180.0, 0.0 ) ) ;
+
+		// ３Ｄモデルを描画
+		MV1DrawModel( ModelHandle ) ;
+
+*/
+//■■■ここまで
+
+		//表と裏（描画画面）の入れ換え
+		ScreenFlip();
+	}
+	//メインループ終了
+
+	DxLib_End();
+	return 0;
+}
